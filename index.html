@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ML Intrusion Detection System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <p class="eyebrow">AI / ML CYBERSECURITY</p>
+      <h1>Intrusion Detection System</h1>
+      <p class="sub">Machine-learning based network traffic classification.</p>
+    </div>
+    <div class="status">● Model Ready</div>
+  </header>
+
+  <section class="cards">
+    <div class="card"><span>Traffic Records</span><strong>{{ stats.total or 0 }}</strong></div>
+    <div class="card"><span>Attack Records</span><strong>{{ stats.attacks or 0 }}</strong></div>
+    <div class="card"><span>Benign Records</span><strong>{{ stats.benign or 0 }}</strong></div>
+    <div class="card"><span>Best Model</span><strong>{{ metadata.best_model or "Train first" }}</strong></div>
+  </section>
+
+  <main>
+    <section class="panel">
+      <h2>Analyze Network Traffic</h2>
+      <p class="hint">Enter one network-flow record and let the trained model classify it.</p>
+
+      <form id="predictForm">
+        <div class="grid">
+          <label>Duration <input name="duration" value="2.4"></label>
+          <label>Source Bytes <input name="src_bytes" value="1200"></label>
+          <label>Destination Bytes <input name="dst_bytes" value="800"></label>
+          <label>Packets <input name="packets" value="15"></label>
+          <label>Protocol
+            <select name="protocol"><option>tcp</option><option>udp</option><option>icmp</option></select>
+          </label>
+          <label>Service
+            <select name="service"><option>http</option><option>https</option><option>dns</option><option>ssh</option><option>ftp</option><option>smtp</option><option>other</option></select>
+          </label>
+          <label>Source Port <input name="src_port" value="44321"></label>
+          <label>Destination Port <input name="dst_port" value="80"></label>
+          <label>Failed Connections <input name="failed_connections" value="0"></label>
+          <label>Connection Rate <input name="connection_rate" value="5.2"></label>
+          <label>Unique Destination Ports <input name="unique_dst_ports" value="1"></label>
+          <label>Bytes / Packet <input name="bytes_per_packet" value="133.3"></label>
+          <label>SYN Count <input name="syn_count" value="2"></label>
+          <label>RST Count <input name="rst_count" value="0"></label>
+          <label>HTTP Requests <input name="http_requests" value="3"></label>
+        </div>
+        <button type="submit">Analyze Traffic</button>
+      </form>
+      <div id="result" class="result hidden"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Model Evaluation</h2>
+      {% if metadata.results %}
+      {% for name, r in metadata.results.items() %}
+      <div class="model">
+        <div class="model-head"><b>{{ name }}</b><span>F1 {{ "%.2f"|format(r.f1 * 100) }}%</span></div>
+        <div class="bar"><i style="width: {{ r.f1 * 100 }}%"></i></div>
+        <small>Accuracy {{ "%.2f"|format(r.accuracy * 100) }}% · Precision {{ "%.2f"|format(r.precision * 100) }}% · Recall {{ "%.2f"|format(r.recall * 100) }}%</small>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p>Run <code>python train.py</code> to generate model evaluation results.</p>
+      {% endif %}
+
+      <h2 class="attack-title">Detected Classes</h2>
+      <div class="chips">
+      {% for label in metadata.classes or [] %}
+        <span>{{ label }}</span>
+      {% endfor %}
+      </div>
+    </section>
+  </main>
+
+  <footer>Educational defensive security project · Synthetic traffic dataset</footer>
+</div>
+
+<script>
+const form = document.getElementById("predictForm");
+const result = document.getElementById("result");
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(form).entries());
+  result.className = "result";
+  result.innerHTML = "Analyzing...";
+  try {
+    const res = await fetch("/api/predict", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Prediction failed");
+    const confidence = json.confidence || {};
+    const lines = Object.entries(confidence)
+      .sort((a,b) => b[1] - a[1])
+      .map(([k,v]) => `<li><span>${k}</span><b>${(v*100).toFixed(2)}%</b></li>`).join("");
+    result.innerHTML = `
+      <div class="prediction ${json.prediction === "BENIGN" ? "safe" : "danger"}">
+        <span>Prediction</span><strong>${json.prediction}</strong>
+      </div>
+      <h3>Class Confidence</h3><ul>${lines}</ul>`;
+  } catch (err) {
+    result.innerHTML = `<div class="error">${err.message}</div>`;
+  }
+});
+</script>
+</body>
+</html>
